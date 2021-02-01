@@ -2,12 +2,16 @@ import Flutter
 import UIKit
 import WebKit
 
-@available(iOS 11.0, *)
 public class SwiftWebviewCookieManagerPlugin: NSObject, FlutterPlugin {
+    @available(iOS 11.0, *)
     static var httpCookieStore: WKHTTPCookieStore?
     
   public static func register(with registrar: FlutterPluginRegistrar) {
-    httpCookieStore = WKWebsiteDataStore.default().httpCookieStore
+    if #available(iOS 11.0, *) {
+        httpCookieStore = WKWebsiteDataStore.default().httpCookieStore
+    } else {
+        // Fallback on earlier versions
+    }
     
     let channel = FlutterMethodChannel(name: "webview_cookie_manager", binaryMessenger: registrar.messenger())
     let instance = SwiftWebviewCookieManagerPlugin()
@@ -45,28 +49,36 @@ public class SwiftWebviewCookieManagerPlugin: NSObject, FlutterPlugin {
     
     public static func clearCookies(result: @escaping FlutterResult) {
 
-        httpCookieStore!.getAllCookies { (cookies) in
-            for cookie in cookies {
-                httpCookieStore!.delete(cookie, completionHandler: nil)
-            }
-            // delete HTTPCookieStorage all cookies
-            if let cookies = HTTPCookieStorage.shared.cookies {
+        if #available(iOS 11.0, *) {
+            httpCookieStore!.getAllCookies { (cookies) in
                 for cookie in cookies {
-                    HTTPCookieStorage.shared.deleteCookie(cookie)
+                    httpCookieStore!.delete(cookie, completionHandler: nil)
                 }
+                // delete HTTPCookieStorage all cookies
+                if let cookies = HTTPCookieStorage.shared.cookies {
+                    for cookie in cookies {
+                        HTTPCookieStorage.shared.deleteCookie(cookie)
+                    }
+                }
+                result(nil)
             }
-            result(nil)
+        } else {
+            // Fallback on earlier versions
         }
     }
     
     public static func hasCookies(result: @escaping FlutterResult) {
-        httpCookieStore!.getAllCookies { (cookies) in
-            var isEmpty = cookies.isEmpty
-            if isEmpty {
-                // If it is empty, check whether the HTTPCookieStorage cookie is also empty.
-                isEmpty = HTTPCookieStorage.shared.cookies?.isEmpty ?? true
+        if #available(iOS 11.0, *) {
+            httpCookieStore!.getAllCookies { (cookies) in
+                var isEmpty = cookies.isEmpty
+                if isEmpty {
+                    // If it is empty, check whether the HTTPCookieStorage cookie is also empty.
+                    isEmpty = HTTPCookieStorage.shared.cookies?.isEmpty ?? true
+                }
+                result(!isEmpty)
             }
-            result(!isEmpty)
+        } else {
+            // Fallback on earlier versions
         }
     }
     
@@ -92,9 +104,14 @@ public class SwiftWebviewCookieManagerPlugin: NSObject, FlutterPlugin {
         
         let cookie = HTTPCookie(properties: properties)!
         
-        httpCookieStore!.setCookie(cookie, completionHandler: {() in
-            result(true)
-        })
+        if #available(iOS 11.0, *) {
+            httpCookieStore!.setCookie(cookie, completionHandler: {() in
+                result(true)
+            })
+        } else {
+            // Fallback on earlier versions
+            HTTPCookieStorage.shared.setCookie(cookie)
+        }
     }
     
     public static func getCookies(urlString: String?, result: @escaping FlutterResult) {
@@ -105,29 +122,33 @@ public class SwiftWebviewCookieManagerPlugin: NSObject, FlutterPlugin {
         let host = URL(string: url)?.host           
        
         // fetch and filter cookies from WKHTTPCookieStore
-        httpCookieStore!.getAllCookies { (wkCookies) in
-                    
-            func matches(cookie: HTTPCookie) -> Bool {
-                // nil host means unparseable url or empty string
-                let containsHost = host.map{cookie.domain.contains($0)} ?? false
-                let containsDomain = host?.contains(cookie.domain) ?? false
-                return url == "" || containsHost || containsDomain
-            }
-                                        
-            var cookies = wkCookies.filter{ matches(cookie: $0) }
-    
-            // If the cookie value is empty in WKHTTPCookieStore,
-            // get the cookie value from HTTPCookieStorage
-            if cookies.count == 0 {
-                if let httpCookies = HTTPCookieStorage.shared.cookies {
-                    cookies = httpCookies.filter{ matches(cookie: $0) }
+        if #available(iOS 11.0, *) {
+            httpCookieStore!.getAllCookies { (wkCookies) in
+                
+                func matches(cookie: HTTPCookie) -> Bool {
+                    // nil host means unparseable url or empty string
+                    let containsHost = host.map{cookie.domain.contains($0)} ?? false
+                    let containsDomain = host?.contains(cookie.domain) ?? false
+                    return url == "" || containsHost || containsDomain
                 }
-            } 
-            let cookieList: NSMutableArray = NSMutableArray()
-            cookies.forEach{ cookie in 
-                cookieList.add(_cookieToDictionary(cookie: cookie))
+                
+                var cookies = wkCookies.filter{ matches(cookie: $0) }
+                
+                // If the cookie value is empty in WKHTTPCookieStore,
+                // get the cookie value from HTTPCookieStorage
+                if cookies.count == 0 {
+                    if let httpCookies = HTTPCookieStorage.shared.cookies {
+                        cookies = httpCookies.filter{ matches(cookie: $0) }
+                    }
+                }
+                let cookieList: NSMutableArray = NSMutableArray()
+                cookies.forEach{ cookie in
+                    cookieList.add(_cookieToDictionary(cookie: cookie))
+                }
+                result(cookieList)
             }
-            result(cookieList)
+        } else {
+            // Fallback on earlier versions
         }
     }
     
