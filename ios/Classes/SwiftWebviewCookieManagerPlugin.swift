@@ -110,6 +110,7 @@ public class SwiftWebviewCookieManagerPlugin: NSObject, FlutterPlugin {
             })
         } else {
             // Fallback on earlier versions
+            result(true)
             // HTTPCookieStorage.shared.setCookie(cookie)
         }
     }
